@@ -9,6 +9,7 @@ import pfp3 from "../images/pfp3.png";
 import pfp4 from "../images/pfp4.png";
 import pfp5 from "../images/pfp5.png";
 import { defaultImgs } from "../defaultimgs";
+import { useMoralis } from "react-moralis";
 
 const Settings = () => {
   const [pfps, setPfps] = useState([pfp1, pfp2, pfp3, pfp4, pfp5]);
@@ -19,6 +20,30 @@ const Settings = () => {
   const [username, setUsername] = useState();
   const [bio, setBio] = useState();
 
+  const { Moralis, isAuthenticated, account } = useMoralis();
+
+  const fetchNFTs = async () => {
+    const options = {
+      chain: "mumbai",
+      address: account
+    }
+
+    const mumbaiNFTs = await Moralis.Web3API.account.getNFTs(options);
+    const images = mumbaiNFTs.result.map(
+      (e) => resolveLink(JSON.parse(e.metadata)?.image)
+    );
+    setPfps(images);
+  }
+
+  useEffect(() => {
+    fetchNFTs();
+  },[isAuthenticated, account])
+
+  const resolveLink = (url) => {
+    if (!url || !url.includes("ipfs://")) return url;
+    return url.replace("ipfs://", "https://gateway.ipfs.io/ipfs/");
+  };
+
   const onBannerClick = () => {
     inputFile.current.click();
   };
@@ -28,6 +53,34 @@ const Settings = () => {
     setTheFile(img);
     setSelectedFile(URL.createObjectURL(img));
   };
+
+  const saveEdits = async () => {
+    const User = Moralis.Object.extend("_User");
+    const query = new Moralis.Query(User);
+    const myDetails = await query.first();
+  
+    if (bio){
+      myDetails.set("bio", bio);
+    }
+  
+    if (selectedPFP){
+      myDetails.set("pfp", selectedPFP);
+    }
+  
+    if (username){
+      myDetails.set("username", username);
+    }
+  
+    if (theFile) {
+      const data = theFile;
+      const file = new Moralis.File(data.name, data);
+      await file.saveIPFS();
+      myDetails.set("banner", file.ipfs());
+    }
+  
+    await myDetails.save();
+    window.location.reload();
+ }
 
   return (
     <>
@@ -87,7 +140,7 @@ const Settings = () => {
            />
          </div>
        </div>
-       <div className="save" /* onClick={() => saveEdits()} */>
+       <div className="save" onClick={() => saveEdits()}>
          Save
        </div>
      </div>
